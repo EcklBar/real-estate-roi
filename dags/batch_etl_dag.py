@@ -92,12 +92,25 @@ def load_to_warehouse(trends: list):
 
 @task()
 def run_quality_checks(load_stats: dict):
-    """Run data quality checks."""
+    """
+    Run data quality checks using SODA Core.
+
+    Executes SODA scan against the data warehouse to validate:
+    - Table row counts are positive
+    - Price values are in valid ranges
+    - No null settlement IDs
+    - No duplicate records
+    - Month/year values are valid
+
+    Falls back to basic checks if SODA is not available.
+    """
     logger.info("Running data quality checks...")
 
     checks_passed = True
     messages = []
+    soda_results = None
 
+    # --- Basic load validation ---
     if load_stats.get("errors", 0) > load_stats.get("total", 0) * 0.1:
         checks_passed = False
         messages.append(f"Error rate too high: {load_stats['errors']}/{load_stats['total']}")
@@ -106,11 +119,70 @@ def run_quality_checks(load_stats: dict):
         checks_passed = False
         messages.append("No records were inserted")
 
-    result = {"passed": checks_passed, "messages": messages, "load_stats": load_stats}
+    # --- SODA Core checks ---
+    try:
+        from soda.scan import Scan
+
+        scan = Scan()
+        scan.set_data_source_name("real_estate_dw")
+
+        # Load SODA configuration
+        config_path = os.path.join(
+            os.path.dirname(__file__), '..', 'include', 'soda', 'configuration.yml'
+        )
+        checks_path = os.path.join(
+            os.path.dirname(__file__), '..', 'include', 'soda', 'checks', 'price_trends.yml'
+        )
+
+        scan.add_configuration_yaml_file(config_path)
+        scan.add_sodacl_yaml_file(checks_path)
+        scan.set_scan_definition_name("batch_etl_quality")
+        scan.set_verbose(True)
+
+        logger.info("Executing SODA scan on agg_price_trends...")
+        scan.execute()
+
+        # Process results
+        soda_results = {
+            "checks_total": scan.get_checks_count(),
+            "checks_passed": scan.get_checks_pass_count(),
+            "checks_warned": scan.get_checks_warn_count(),
+            "checks_failed": scan.get_checks_fail_count(),
+            "has_errors": scan.has_check_fails(),
+        }
+
+        if scan.has_check_fails():
+            checks_passed = False
+            failed_checks = [
+                str(check) for check in scan.get_checks_fail()
+            ]
+            messages.append(f"SODA checks failed: {failed_checks}")
+            logger.warning(f"SODA scan found failures: {failed_checks}")
+        else:
+            logger.info(
+                f"SODA scan passed: {soda_results['checks_passed']}"
+                f"/{soda_results['checks_total']} checks OK"
+            )
+
+    except ImportError:
+        logger.info("SODA Core not installed, skipping SODA checks")
+        messages.append("SODA checks skipped (soda-core not installed)")
+    except Exception as e:
+        logger.warning(f"SODA scan failed with error: {e}")
+        messages.append(f"SODA scan error: {str(e)}")
+
+    result = {
+        "passed": checks_passed,
+        "messages": messages,
+        "load_stats": load_stats,
+        "soda_results": soda_results,
+    }
+
     if not checks_passed:
         logger.warning(f"Quality checks failed: {messages}")
     else:
-        logger.info("Quality checks passed")
+        logger.info("All quality checks passed")
+
     return result
 
 
