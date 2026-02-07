@@ -1,8 +1,0 @@
-data_source real_estate_dw:
-  type: postgres
-  host: ${POSTGRES_HOST}
-  port: ${POSTGRES_PORT}
-  username: ${POSTGRES_USER}
-  password: ${POSTGRES_PASSWORD}
-  database: ${POSTGRES_DB}
-  schema: public
