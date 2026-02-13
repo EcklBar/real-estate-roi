@@ -18,9 +18,8 @@ x-airflow-common: &airflow-common
     WAREHOUSE_PASSWORD: nadlanist123
   volumes:
     - ./dags:/opt/airflow/dags
-    - ./ingestion:/opt/airflow/ingestion
+    - ./src:/opt/airflow/src
     - ./processing:/opt/airflow/processing
-    - ./streaming:/opt/airflow/streaming
     - airflow-logs:/opt/airflow/logs
   depends_on:
     airflow-db:
@@ -75,7 +74,7 @@ services:
       POSTGRES_PASSWORD: nadlanist123
     volumes:
       - postgres-data:/var/lib/postgresql/data
-      - ./warehouse/init.sql:/docker-entrypoint-initdb.d/01-init.sql
+      - ./include/sql/init.sql:/docker-entrypoint-initdb.d/01-init.sql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U nadlanist -d nadlanist"]
       interval: 10s
