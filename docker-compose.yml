@@ -14,6 +14,8 @@ x-airflow-common: &airflow-common
     WAREHOUSE_DB: nadlanist
     WAREHOUSE_USER: nadlanist
     WAREHOUSE_PASSWORD: nadlanist123
+    KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+    DIROBOT_BASE_URL: https://api.dirobot.co.il/api/v2
   volumes:
     - ./dags:/opt/airflow/dags
     - ./src:/opt/airflow/src
