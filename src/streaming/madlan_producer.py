@@ -8,6 +8,7 @@ import os
 import re
 import time
 from datetime import datetime
+from typing import Optional
 from urllib.parse import urljoin
 
 from curl_cffi import requests as cffi_requests
@@ -50,7 +51,7 @@ def fetch_madlan_page(url: str, page: int = 1) -> str:
         return ""
 
 
-def parse_listing_from_link(link, listing_id: str) -> dict | None:
+def parse_listing_from_link(link, listing_id: str) -> Optional[dict]:
     """
     Parse one listing from a Madlan listing link.
     Link text often looks like: ₪2,300,000 5 חד׳ קומה 3 200 מ"ר דירה, מורן 4, אבן גבירול, רחובות
