@@ -187,21 +187,26 @@ def etl_timeseries(spark: SparkSession):
     """
     print("\n[ETL] Reading timeseries from MinIO...")
 
-    # Step 1: Read timeseries files
     ts_path = "s3a://nadlanist-raw/dirobot/timeseries/*/year=*/month=*/data.json"
     raw_df = spark.read.option("multiline", "true").json(ts_path)
 
-    # Step 2: The data has nested structure:
-    # timeSeriesByRooms is a map of room_category -> array of monthly data
-    # We need to explode both the map and the array
-
-    # First, explode the map (room categories)
+    # timeSeriesByRooms is a STRUCT with known field names, not a MAP
+    # Use stack() to unpivot the 6 room categories into rows
     rooms_df = raw_df.select(
         F.col("city"),
-        F.explode("timeSeriesByRooms").alias("room_category", "monthly_data")
+        F.expr("""
+            stack(6,
+                '1-2 rooms', timeSeriesByRooms.`1-2 חדרים`,
+                '3 rooms', timeSeriesByRooms.`3 חדרים`,
+                '4 rooms', timeSeriesByRooms.`4 חדרים`,
+                '5 rooms', timeSeriesByRooms.`5 חדרים`,
+                '6 rooms', timeSeriesByRooms.`6 חדרים`,
+                '6+ rooms', timeSeriesByRooms.`6+ חדרים`
+            ) as (room_category, monthly_data)
+        """)
     )
 
-    # Then explode the array (monthly data points)
+    # Now explode the monthly_data array (each room category has an array of months)
     monthly_df = rooms_df.select(
         F.col("city"),
         F.col("room_category"),
@@ -220,15 +225,13 @@ def etl_timeseries(spark: SparkSession):
         F.col("data.transactionCount").cast(T.IntegerType()).alias("transaction_count"),
     )
 
-    # Filter out nulls
     flat_df = flat_df.filter(F.col("market_value").isNotNull())
 
     total = flat_df.count()
     print(f"  Total timeseries records: {total}")
     flat_df.show(5, truncate=False)
 
-    # Step 3: Write to fact_market_indices
-    # Map to the table columns we have
+    # Write to fact_market_indices
     indices_df = flat_df.select(
         F.col("market_value").alias("avg_price_per_sqm"),
         F.col("growth_pct").alias("boi_interest_rate"),
