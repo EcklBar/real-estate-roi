@@ -97,18 +97,18 @@ def etl_street_deals(spark: SparkSession):
         F.explode("deals").alias("deal")
     )
 
-    # Flatten the deal struct into columns
+        # Flatten the deal struct into columns
     flat_df = deals_df.select(
         F.col("city"),
         F.col("street"),
         F.col("deal.neighborhood").alias("neighborhood"),
-        F.col("deal.streetName").alias("street_name"),
+        F.col("deal.street").alias("street_name"),
         F.col("deal.houseNumber").alias("house_number"),
         F.col("deal.propertyType").alias("property_type"),
         F.col("deal.rooms").cast(T.FloatType()).alias("rooms"),
         F.col("deal.floor").cast(T.IntegerType()).alias("floor"),
         F.col("deal.buildYear").cast(T.IntegerType()).alias("year_built"),
-        F.col("deal.squareMeters").cast(T.FloatType()).alias("sqm"),
+        F.col("deal.numberOfFloors").cast(T.IntegerType()).alias("total_floors"),
         F.col("deal.price").cast(T.FloatType()).alias("price"),
         F.col("deal.saleDate").alias("sale_date"),
     )
