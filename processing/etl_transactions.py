@@ -97,7 +97,7 @@ def etl_street_deals(spark: SparkSession):
         F.explode("deals").alias("deal")
     )
 
-        # Flatten the deal struct into columns
+    # Flatten the deal struct into columns
     flat_df = deals_df.select(
         F.col("city"),
         F.col("street"),
@@ -136,7 +136,7 @@ def etl_street_deals(spark: SparkSession):
     )
     write_to_postgres(locations_df, "dim_location")
 
-        # Step 4: Build and load dim_property
+    # Step 4: Build and load dim_property
     print("\n[ETL] Loading dim_property...")
     properties_df = (
         enriched_df
@@ -145,7 +145,7 @@ def etl_street_deals(spark: SparkSession):
     )
     write_to_postgres(properties_df, "dim_property")
 
-        # Step 5: Load fact_transactions
+    # Step 5: Load fact_transactions
     print("\n[ETL] Loading fact_transactions...")
     facts_df = enriched_df.select(
         F.col("time_id"),
