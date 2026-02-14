@@ -37,13 +37,18 @@ JDBC_PROPERTIES = {
 
 def create_spark_session() -> SparkSession:
     """Create SparkSession configured for MinIO (S3A) and PostgreSQL (JDBC)."""
-    jar_path = os.path.join(os.path.dirname(__file__), "..", "jars", "postgresql-42.7.1.jar")
+    jars_dir = os.path.join(os.path.dirname(__file__), "..", "jars")
+    jar_files = ",".join([
+        os.path.join(jars_dir, "postgresql-42.7.1.jar"),
+        os.path.join(jars_dir, "hadoop-aws-3.3.4.jar"),
+        os.path.join(jars_dir, "aws-java-sdk-bundle-1.12.262.jar"),
+    ])
 
     spark = (
         SparkSession.builder
         .appName("Nadlanist-ETL")
         .master("local[*]")
-        .config("spark.jars", jar_path)
+        .config("spark.jars", jar_files)
         .config("spark.hadoop.fs.s3a.endpoint", f"http://{MINIO_ENDPOINT}")
         .config("spark.hadoop.fs.s3a.access.key", MINIO_ACCESS_KEY)
         .config("spark.hadoop.fs.s3a.secret.key", MINIO_SECRET_KEY)
