@@ -23,12 +23,13 @@ MINIO_ACCESS_KEY = os.getenv("MINIO_ACCESS_KEY", "minioadmin")
 MINIO_SECRET_KEY = os.getenv("MINIO_SECRET_KEY", "minioadmin123")
 RAW_BUCKET = "nadlanist-raw"
 
-GOV_IL_API = "https://data.gov.il/api/3/action/datastore_search"
+GOV_IL_API = "https://data.gov.il/api/action/datastore_search"
 NADLAN_RESOURCE_ID = "5c995652-79a8-4e85-bb67-e648acfea6cc"
 
 # ============================================
 # NADLAN.GOV.IL API
-# ===========================================
+# ============================================
+
 def fetch_transactions(city: str, limit: int = 1000, offset: int = 0) -> dict:
     """
     Fetch real estate transactions from data.gov.il CKAN API.
