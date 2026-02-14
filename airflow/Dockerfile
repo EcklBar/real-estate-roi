@@ -3,7 +3,11 @@ FROM apache/airflow:2.9.2-python3.11
 
 USER root
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends default-jre-headless \
+    && apt-get install -y --no-install-recommends \
+        default-jre-headless \
+        build-essential \
+        libcurl4-openssl-dev \
+        libssl-dev \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 

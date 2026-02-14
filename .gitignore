@@ -3,3 +3,4 @@ pycache/
 .env
 .DS_Store
 jars/*.jar
+__pycache__
