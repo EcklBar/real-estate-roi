@@ -51,6 +51,19 @@ def fetch_madlan_page(url: str, page: int = 1) -> str:
         return ""
 
 
+def _clean_city(city: str) -> str:
+    """Remove broker/source suffixes from city name."""
+    for suffix in [
+        "תיווך",
+        "בבלעדיות",
+        "Top10 במדד המתווכים",
+        "תיווךTop10 במדד המתווכים",
+    ]:
+        if suffix in city:
+            city = city.replace(suffix, "").strip()
+    return city.strip()
+
+
 def parse_listing_from_link(link, listing_id: str) -> Optional[dict]:
     """
     Parse one listing from a Madlan listing link.
@@ -61,15 +74,23 @@ def parse_listing_from_link(link, listing_id: str) -> Optional[dict]:
     if "/listings/" not in href or not text:
         return None
 
-    # Price: ₪1,234,567 or ₪1234567
-    price_m = re.search(r"₪\s*([\d,]+)", text.replace(" ", ""))
+    # Price: stop before rooms digit (3,150,0004 -> 3,150,000) or before sqm (6,120,000,350 -> 6,120,000)
+    text_no_spaces = text.replace(" ", "")
+    price_m = re.search(
+        r"₪\s*((?:\d{1,3},)*\d{1,3})(?=\d?חד|\d+מ|$)",
+        text_no_spaces,
+    )
+    if not price_m:
+        price_m = re.search(r"₪\s*([\d,]+)", text_no_spaces)
     price = int(price_m.group(1).replace(",", "")) if price_m else None
     if not price:
         return None
 
-    # Rooms: 4 or 4.5 חד׳
+    # Rooms: 4 or 4.5 חד׳ — only accept reasonable range (1–20)
     rooms_m = re.search(r"(\d+(?:\.\d+)?)\s*חד['\u2019]?", text)
     rooms = float(rooms_m.group(1)) if rooms_m else None
+    if rooms is not None and (rooms < 1 or rooms > 20):
+        rooms = None
 
     # Floor: קומה 2 or קומת קרקע
     floor = None
@@ -92,7 +113,7 @@ def parse_listing_from_link(link, listing_id: str) -> Optional[dict]:
         # Skip price/rooms part; address usually last 2-3 parts
         addr_parts = [p for p in parts[1:] if p and not re.match(r"^₪", p)]
         if len(addr_parts) >= 1:
-            city = addr_parts[-1]
+            city = _clean_city(addr_parts[-1])
         if len(addr_parts) >= 2:
             street = addr_parts[0]
         if len(addr_parts) >= 3:
