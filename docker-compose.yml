@@ -124,7 +124,7 @@ services:
       - kafka
 
   spark-master:
-    image: bitnami/spark:3.5
+    image: bitnami/spark:3.5.3
     container_name: nadlanist-spark-master
     ports:
       - "8081:8080"
@@ -137,7 +137,7 @@ services:
       - ./jars:/opt/spark/jars/custom
 
   spark-worker:
-    image: bitnami/spark:3.5
+    image: bitnami/spark:3.5.3
     container_name: nadlanist-spark-worker
     environment:
       SPARK_MODE: worker
