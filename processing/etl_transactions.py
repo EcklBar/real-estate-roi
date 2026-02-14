@@ -54,3 +54,132 @@ def create_spark_session() -> SparkSession:
 
     spark.sparkContext.setLogLevel("WARN")
     return spark
+# ============================================
+# HELPER: Write DataFrame to PostgreSQL
+# ============================================
+
+def write_to_postgres(df, table_name: str, mode: str = "append"):
+    """Write a Spark DataFrame to a PostgreSQL table."""
+    df.write.jdbc(
+        url=JDBC_URL,
+        table=table_name,
+        mode=mode,
+        properties=JDBC_PROPERTIES,
+    )
+    print(f"  Wrote {df.count()} rows to {table_name}")
+
+
+# ============================================
+# ETL: Street Deals → Star Schema
+# ============================================
+
+def etl_street_deals(spark: SparkSession):
+    """
+    Read street deal JSONs from MinIO, transform, and load into
+    dim_location, dim_property, and fact_transactions.
+    """
+    print("\n[ETL] Reading street deals from MinIO...")
+
+    # Step 1: Read all deal files from MinIO
+    deals_path = "s3a://nadlanist-raw/dirobot/deals/*/year=*/month=*/data.json"
+    raw_df = spark.read.option("multiline", "true").json(deals_path)
+
+    # The JSON has nested structure: {city, street, deals: [...]}
+    # Explode the deals array so each deal becomes its own row
+    deals_df = raw_df.select(
+        F.col("city"),
+        F.col("street"),
+        F.explode("deals").alias("deal")
+    )
+
+    # Flatten the deal struct into columns
+    flat_df = deals_df.select(
+        F.col("city"),
+        F.col("street"),
+        F.col("deal.neighborhood").alias("neighborhood"),
+        F.col("deal.streetName").alias("street_name"),
+        F.col("deal.houseNumber").alias("house_number"),
+        F.col("deal.propertyType").alias("property_type"),
+        F.col("deal.rooms").cast(T.FloatType()).alias("rooms"),
+        F.col("deal.floor").cast(T.IntegerType()).alias("floor"),
+        F.col("deal.buildYear").cast(T.IntegerType()).alias("year_built"),
+        F.col("deal.squareMeters").cast(T.FloatType()).alias("sqm"),
+        F.col("deal.price").cast(T.FloatType()).alias("price"),
+        F.col("deal.saleDate").alias("sale_date"),
+    )
+
+    # Step 2: Add calculated fields
+    enriched_df = flat_df.withColumn(
+        "price_per_sqm",
+        F.when(F.col("sqm") > 0, F.round(F.col("price") / F.col("sqm"), 0)).otherwise(None)
+    ).withColumn(
+        "time_id",
+        F.regexp_replace(F.col("sale_date"), "-", "").cast(T.IntegerType())
+    )
+
+    # Filter out rows with no price
+    enriched_df = enriched_df.filter(F.col("price").isNotNull() & (F.col("price") > 0))
+
+    total = enriched_df.count()
+    print(f"  Total deals after cleaning: {total}")
+    enriched_df.show(5, truncate=False)
+
+    # Step 3: Build and load dim_location
+    print("\n[ETL] Loading dim_location...")
+    locations_df = (
+        enriched_df
+        .select("city", "neighborhood", "street_name")
+        .withColumnRenamed("street_name", "street")
+        .distinct()
+    )
+    write_to_postgres(locations_df, "dim_location")
+
+    # Step 4: Build and load dim_property
+    print("\n[ETL] Loading dim_property...")
+    properties_df = (
+        enriched_df
+        .select("property_type", "rooms", "year_built", "floor")
+        .distinct()
+    )
+    write_to_postgres(properties_df, "dim_property")
+
+    # Step 5: Load fact_transactions
+    print("\n[ETL] Loading fact_transactions...")
+    facts_df = enriched_df.select(
+        F.col("time_id"),
+        F.col("price"),
+        F.col("sqm"),
+        F.col("price_per_sqm"),
+        F.col("property_type").alias("transaction_type"),
+        F.concat(
+            F.col("city"), F.lit(", "),
+            F.col("street_name"), F.lit(" "),
+            F.col("house_number")
+        ).alias("raw_address"),
+    )
+    write_to_postgres(facts_df, "fact_transactions")
+
+    print(f"\n[ETL] Street deals complete! {total} transactions loaded.")
+
+
+# ============================================
+# MAIN
+# ============================================
+
+def main():
+    """Run the full ETL pipeline."""
+    print("=" * 60)
+    print("Nadlanist -- PySpark ETL")
+    print("=" * 60)
+
+    spark = create_spark_session()
+
+    try:
+        etl_street_deals(spark)
+    finally:
+        spark.stop()
+        print("\nSpark session closed.")
+
+
+if __name__ == "__main__":
+    main()
