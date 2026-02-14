@@ -23,74 +23,76 @@ MINIO_ACCESS_KEY = os.getenv("MINIO_ACCESS_KEY", "minioadmin")
 MINIO_SECRET_KEY = os.getenv("MINIO_SECRET_KEY", "minioadmin123")
 RAW_BUCKET = "nadlanist-raw"
 
-NADLAN_GOV_API = "https://www.nadlan.gov.il/Nadlan.REST/Main/GetAssestAndDeals"
+GOV_IL_API = "https://data.gov.il/api/3/action/datastore_search"
+NADLAN_RESOURCE_ID = "5c995652-79a8-4e85-bb67-e648acfea6cc"
 
 # ============================================
 # NADLAN.GOV.IL API
-# ============================================
-
-def fetch_transactions(city: str, page: int = 1, page_size: int = 50) -> dict:
+# ===========================================
+def fetch_transactions(city: str, limit: int = 1000, offset: int = 0) -> dict:
     """
-    Fetch one page of real estate transactions from nadlan.gov.il.
+    Fetch real estate transactions from data.gov.il CKAN API.
 
     Args:
         city: City name in Hebrew (e.g., "תל אביב יפו")
-        page: Page number for pagination
-        page_size: Number of results per page (max ~50)
+        limit: Number of results (max 32000)
+        offset: Number of records to skip (for pagination)
 
     Returns:
-        dict with transaction data
+        dict with records and total count
     """
-    headers = {
-        "Content-Type": "application/json",
-        "User-Agent": "Mozilla/5.0 (nadlanist-project)",
-    }
-
-    payload = {
-        "ObjectID": "",
-        "CurrentLavel": 1,
-        "PageNo": page,
-        "OrderByRecordCount": page_size,
-        "OrderByParam": "DEALDATETIME DESC",
-        "ObjectIDRecived": "",
-        "FilterValue": city,
+    params = {
+        "resource_id": NADLAN_RESOURCE_ID,
+        "limit": limit,
+        "offset": offset,
+        "filters": json.dumps({"SETL_NAME": city}),
     }
 
     try:
-        resp = requests.post(NADLAN_GOV_API, json=payload, headers=headers, timeout=30)
+        resp = requests.get(GOV_IL_API, params=params, timeout=60)
         resp.raise_for_status()
         data = resp.json()
-        print(f"  Page {page}: Got {len(data.get('AllResults', []))} transactions")
-        return data
+
+        if not data.get("success"):
+            print(f"  API error: {data.get('error', 'Unknown')}")
+            return {"records": [], "total": 0}
+
+        result = data["result"]
+        records = result.get("records", [])
+        total = result.get("total", 0)
+
+        print(f"  Got {len(records)} records (total available: {total})")
+        return {"records": records, "total": total}
+
     except requests.RequestException as e:
-        print(f"  Error fetching page {page}: {e}")
-        return {}
-
-
-def fetch_all_transactions(city: str, max_pages: int = 3, delay: float = 2.0) -> list:
+        print(f"  Error: {e}")
+        return {"records": [], "total": 0}
+    
+def fetch_all_transactions(city: str, batch_size: int = 1000, max_records: int = 3000, delay: float = 1.0) -> list:
     """
-    Fetch multiple pages of transactions for a city.
-    Respects rate limiting with delay between requests.
+    Fetch multiple batches of transactions for a city.
     """
-    all_transactions = []
+    all_records = []
+    offset = 0
 
-    for page in range(1, max_pages + 1):
-        print(f"Fetching {city} - page {page}/{max_pages}...")
-        data = fetch_transactions(city, page=page)
+    while len(all_records) < max_records:
+        print(f"Fetching {city} - offset {offset}...")
+        result = fetch_transactions(city, limit=batch_size, offset=offset)
 
-        results = data.get("AllResults", [])
-        if not results:
-            print(f"  No more results at page {page}")
+        records = result["records"]
+        if not records:
             break
 
-        all_transactions.extend(results)
+        all_records.extend(records)
+        offset += batch_size
 
-        if page < max_pages:
-            time.sleep(delay)
+        if len(records) < batch_size:
+            break
 
-    print(f"Total transactions fetched for {city}: {len(all_transactions)}")
-    return all_transactions
+        time.sleep(delay)
 
+    print(f"Total records for {city}: {len(all_records)}")
+    return all_records
 # ============================================
 # MINIO UPLOAD
 # ============================================
