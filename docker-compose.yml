@@ -1,5 +1,5 @@
 x-airflow-common: &airflow-common
-  image: apache/airflow:2.9.2-python3.11
+  build: ./airflow
   environment:
     AIRFLOW__CORE__EXECUTOR: LocalExecutor
     AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@airflow-db:5432/airflow
@@ -18,6 +18,7 @@ x-airflow-common: &airflow-common
     - ./dags:/opt/airflow/dags
     - ./src:/opt/airflow/src
     - ./processing:/opt/airflow/processing
+    - ./jars:/opt/airflow/jars
     - airflow-logs:/opt/airflow/logs
   depends_on:
     airflow-db:
@@ -191,6 +192,8 @@ services:
       WAREHOUSE_DB: nadlanist
       WAREHOUSE_USER: nadlanist
       WAREHOUSE_PASSWORD: nadlanist123
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      DIROBOT_BASE_URL: https://api.dirobot.co.il/api/v2
     depends_on:
       postgres-warehouse:
         condition: service_healthy
