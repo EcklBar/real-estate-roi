@@ -54,6 +54,27 @@ def fetch_cities_summary(min_deals: int = 50) -> dict:
         return {}
 
 
+def get_city_names_from_summary(cities_data: dict, limit: int = 100) -> list:
+    """
+    Extract list of city names from cities-summary API response.
+    Handles different response shapes: list of strings or list of dicts with city/name.
+    """
+    if not cities_data:
+        return []
+    raw = cities_data.get("cities") or cities_data.get("items") or cities_data.get("data") or []
+    names = []
+    for item in raw:
+        if isinstance(item, str):
+            names.append(item.strip())
+        elif isinstance(item, dict):
+            name = item.get("city_name") or item.get("city") or item.get("name") or item.get("label")
+            if name:
+                names.append(str(name).strip())
+        if len(names) >= limit:
+            break
+    return names
+
+
 def fetch_neighborhoods(city: str, min_deals: int = 5) -> dict:
     """Fetch neighborhood breakdown for a specific city."""
     encoded_city = quote(city, safe="")
@@ -102,7 +123,44 @@ def fetch_street_deals(city: str, street: str, per_page: int = 10000) -> dict:
     except requests.RequestException as e:
         print(f"  Error fetching deals for {city}/{street}: {e}")
         return {}
-    
+
+
+def fetch_streets_summary(city: str, min_deals: int = 1) -> dict:
+    """Fetch list of all streets with deals for a city (API: streets-summary)."""
+    encoded_city = quote(city, safe="")
+    url = f"{DIROBOT_BASE_URL}/streets-summary?city={encoded_city}&min_deals={min_deals}"
+    try:
+        resp = requests.get(url, headers=DIROBOT_HEADERS, timeout=60)
+        resp.raise_for_status()
+        data = resp.json()
+        streets = data.get("streets", [])
+        print(f"  {city}: {len(streets)} streets from API")
+        return data
+    except requests.RequestException as e:
+        print(f"  Error fetching streets for {city}: {e}")
+        return {}
+
+
+def get_street_list_from_summary(streets_data: dict, limit_per_city: int = None) -> list:
+    """
+    Extract list of (city, street) from streets-summary API response.
+    Returns list of tuples for use with fetch_street_deals.
+    """
+    if not streets_data:
+        return []
+    raw = streets_data.get("streets") or []
+    out = []
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        city = item.get("city")
+        street = item.get("street")
+        if city and street:
+            out.append((city.strip(), str(street).strip()))
+        if limit_per_city and len(out) >= limit_per_city:
+            break
+    return out
+
 # ============================================
 # MINIO UPLOAD
 # ============================================
@@ -159,19 +217,28 @@ def upload_to_minio(data: dict, data_type: str, label: str) -> str:
 # MAIN
 # ============================================
 
+# Max streets to fetch per city (None = all streets from API; set e.g. 200 to cap runtime)
+MAX_STREETS_PER_CITY = None
+
+
 def main():
-    """Fetch real estate data and upload to MinIO."""
+    """Fetch real estate data and upload to MinIO. Cities and streets from API (all streets)."""
     print("=" * 60)
-    print("Nadlanist -- Dirobot Fetcher")
+    print("Nadlanist -- Dirobot Fetcher (all cities, all streets)")
     print("=" * 60)
 
-    cities = ["תל אביב יפו", "ירושלים", "חיפה"]
-
-    # 1. Cities summary (all Israel)
+    # 1. Cities summary (all Israel) and get dynamic city list
     print("\n[1/4] Fetching cities summary...")
-    cities_data = fetch_cities_summary(min_deals=50)
+    cities_data = fetch_cities_summary(min_deals=30)
     if cities_data:
         upload_to_minio(cities_data, "cities", "all")
+
+    cities = get_city_names_from_summary(cities_data, limit=80)
+    if not cities:
+        cities = ["תל אביב יפו", "ירושלים", "חיפה"]
+        print(f"  Fallback to default cities: {cities}")
+    else:
+        print(f"  Using {len(cities)} cities from API for neighborhoods, timeseries, and deals")
 
     # 2. Neighborhoods for each city
     print("\n[2/4] Fetching neighborhoods...")
@@ -179,7 +246,7 @@ def main():
         neighborhoods_data = fetch_neighborhoods(city)
         if neighborhoods_data:
             upload_to_minio(neighborhoods_data, "neighborhoods", city)
-        time.sleep(1)
+        time.sleep(0.5)
 
     # 3. Timeseries for each city
     print("\n[3/4] Fetching price timeseries...")
@@ -187,20 +254,22 @@ def main():
         timeseries_data = fetch_city_timeseries(city)
         if timeseries_data:
             upload_to_minio(timeseries_data, "timeseries", city)
-        time.sleep(1)
+        time.sleep(0.5)
 
-    # 4. Street deals (sample: one major street per city)
-    print("\n[4/4] Fetching street deals...")
-    sample_streets = [
-        ("תל אביב יפו", "דיזנגוף"),
-        ("ירושלים", "יפו"),
-        ("חיפה", "הרצל"),
-    ]
-    for city, street in sample_streets:
-        deals_data = fetch_street_deals(city, street)
-        if deals_data:
-            upload_to_minio(deals_data, "deals", f"{city}_{street}")
-        time.sleep(1)
+    # 4. Street deals: for each city get ALL streets from streets-summary, then fetch deals per street
+    print("\n[4/4] Fetching street deals (all streets from API)...")
+    total_streets = 0
+    for city in cities:
+        streets_data = fetch_streets_summary(city, min_deals=1)
+        street_list = get_street_list_from_summary(streets_data, limit_per_city=MAX_STREETS_PER_CITY)
+        for city_name, street_name in street_list:
+            deals_data = fetch_street_deals(city_name, street_name)
+            if deals_data and deals_data.get("deals"):
+                upload_to_minio(deals_data, "deals", f"{city_name}_{street_name}")
+                total_streets += 1
+            time.sleep(0.2)
+        time.sleep(0.3)
+    print(f"  Total street-deal files uploaded: {total_streets}")
 
     print("\n" + "=" * 60)
     print("Done! Check MinIO Console at http://localhost:9001")
