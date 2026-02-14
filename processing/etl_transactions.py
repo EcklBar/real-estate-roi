@@ -7,7 +7,7 @@ import os
 from dotenv import load_dotenv
 from pyspark.sql import SparkSession
 from pyspark.sql import functions as F
-from pyspark.sql.types import IntegerType, FloatType
+from pyspark.sql import types as T
 
 load_dotenv()
 
@@ -15,14 +15,14 @@ load_dotenv()
 # CONFIG
 # ============================================
 MINIO_ENDPOINT = os.getenv("MINIO_ENDPOINT", "localhost:9000")
-MINIO_ACCESS_KEY = os.getenv("MINIO_ACCESS_KEY", "minioadmin")
-MINIO_SECRET_KEY = os.getenv("MINIO_SECRET_KEY", "minioadmin123")
+MINIO_ACCESS_KEY = os.getenv("MINIO_ACCESS_KEY")
+MINIO_SECRET_KEY = os.getenv("MINIO_SECRET_KEY")
 
 WAREHOUSE_HOST = os.getenv("WAREHOUSE_HOST", "localhost")
 WAREHOUSE_PORT = os.getenv("WAREHOUSE_PORT", "5433")
 WAREHOUSE_DB = os.getenv("WAREHOUSE_DB", "nadlanist")
-WAREHOUSE_USER = os.getenv("WAREHOUSE_USER", "nadlanist")
-WAREHOUSE_PASSWORD = os.getenv("WAREHOUSE_PASSWORD", "nadlanist123")
+WAREHOUSE_USER = os.getenv("WAREHOUSE_USER")
+WAREHOUSE_PASSWORD = os.getenv("WAREHOUSE_PASSWORD")
 
 JDBC_URL = f"jdbc:postgresql://{WAREHOUSE_HOST}:{WAREHOUSE_PORT}/{WAREHOUSE_DB}"
 JDBC_PROPERTIES = {

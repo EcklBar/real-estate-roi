@@ -22,8 +22,8 @@ load_dotenv()
 # CONFIG
 # ============================================
 MINIO_ENDPOINT = os.getenv("MINIO_ENDPOINT", "localhost:9000")
-MINIO_ACCESS_KEY = os.getenv("MINIO_ACCESS_KEY", "minioadmin")
-MINIO_SECRET_KEY = os.getenv("MINIO_SECRET_KEY", "minioadmin123")
+MINIO_ACCESS_KEY = os.getenv("MINIO_ACCESS_KEY")
+MINIO_SECRET_KEY = os.getenv("MINIO_SECRET_KEY")
 RAW_BUCKET = "nadlanist-raw"
 
 DIROBOT_BASE_URL = "https://api.dirobot.co.il/api/v2"
