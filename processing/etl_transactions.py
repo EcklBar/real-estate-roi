@@ -73,6 +73,22 @@ def write_to_postgres(df, table_name: str, mode: str = "append"):
     )
     print(f"  Wrote {df.count()} rows to {table_name}")
 
+def truncate_tables():
+    """Clear fact and dimension tables for a clean re-run."""
+    import psycopg2
+    conn = psycopg2.connect(
+        host=WAREHOUSE_HOST, port=WAREHOUSE_PORT,
+        dbname=WAREHOUSE_DB, user=WAREHOUSE_USER, password=WAREHOUSE_PASSWORD
+    )
+    cur = conn.cursor()
+    # Order matters: facts first (they reference dims), then dims
+    tables = ["fact_transactions", "fact_market_indices", "dim_property", "dim_location"]
+    for table in tables:
+        cur.execute(f"TRUNCATE TABLE {table} CASCADE")
+        print(f"  Truncated {table}")
+    conn.commit()
+    cur.close()
+    conn.close()
 
 # ============================================
 # ETL: Street Deals → Star Schema
@@ -160,6 +176,66 @@ def etl_street_deals(spark: SparkSession):
     write_to_postgres(facts_df, "fact_transactions")
 
     print(f"\n[ETL] Street deals complete! {total} transactions loaded.")
+    
+# ============================================
+# ETL: City Timeseries → fact_market_indices
+# ============================================
+
+def etl_timeseries(spark: SparkSession):
+    """
+    Read city timeseries JSONs from MinIO, transform, and load into fact_market_indices.
+    """
+    print("\n[ETL] Reading timeseries from MinIO...")
+
+    # Step 1: Read timeseries files
+    ts_path = "s3a://nadlanist-raw/dirobot/timeseries/*/year=*/month=*/data.json"
+    raw_df = spark.read.option("multiline", "true").json(ts_path)
+
+    # Step 2: The data has nested structure:
+    # timeSeriesByRooms is a map of room_category -> array of monthly data
+    # We need to explode both the map and the array
+
+    # First, explode the map (room categories)
+    rooms_df = raw_df.select(
+        F.col("city"),
+        F.explode("timeSeriesByRooms").alias("room_category", "monthly_data")
+    )
+
+    # Then explode the array (monthly data points)
+    monthly_df = rooms_df.select(
+        F.col("city"),
+        F.col("room_category"),
+        F.explode("monthly_data").alias("data")
+    )
+
+    # Flatten into columns
+    flat_df = monthly_df.select(
+        F.col("city"),
+        F.col("room_category"),
+        F.col("data.year").cast(T.IntegerType()).alias("year"),
+        F.col("data.month").alias("month_name"),
+        F.col("data.marketValue").cast(T.FloatType()).alias("market_value"),
+        F.col("data.askingPrice").cast(T.FloatType()).alias("asking_price"),
+        F.col("data.growth").cast(T.FloatType()).alias("growth_pct"),
+        F.col("data.transactionCount").cast(T.IntegerType()).alias("transaction_count"),
+    )
+
+    # Filter out nulls
+    flat_df = flat_df.filter(F.col("market_value").isNotNull())
+
+    total = flat_df.count()
+    print(f"  Total timeseries records: {total}")
+    flat_df.show(5, truncate=False)
+
+    # Step 3: Write to fact_market_indices
+    # Map to the table columns we have
+    indices_df = flat_df.select(
+        F.col("market_value").alias("avg_price_per_sqm"),
+        F.col("growth_pct").alias("boi_interest_rate"),
+    )
+    write_to_postgres(indices_df, "fact_market_indices")
+
+    print(f"\n[ETL] Timeseries complete! {total} records loaded.")
 
 
 # ============================================
@@ -172,10 +248,14 @@ def main():
     print("Nadlanist -- PySpark ETL")
     print("=" * 60)
 
+    print("\n[ETL] Cleaning tables for fresh load...")
+    truncate_tables()
+
     spark = create_spark_session()
 
     try:
         etl_street_deals(spark)
+        etl_timeseries(spark)
     finally:
         spark.stop()
         print("\nSpark session closed.")
