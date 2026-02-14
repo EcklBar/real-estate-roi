@@ -74,10 +74,10 @@ def parse_listing_from_link(link, listing_id: str) -> Optional[dict]:
     if "/listings/" not in href or not text:
         return None
 
-    # Price: stop before rooms digit (3,150,0004 -> 3,150,000) or before sqm (6,120,000,350 -> 6,120,000)
+    # Price: stop before rooms (4 or 4.5 or 10 חד) or sqm — so we don't capture rooms digit(s) into price
     text_no_spaces = text.replace(" ", "")
     price_m = re.search(
-        r"₪\s*((?:\d{1,3},)*\d{1,3})(?=\d?חד|\d+מ|$)",
+        r"₪\s*((?:\d{1,3},)*\d{1,3})(?=\d+(?:\.\d+)?חד|\d+מ|$)",
         text_no_spaces,
     )
     if not price_m:
