@@ -3,6 +3,7 @@ listings_consumer.py -- Consumes real estate listings from Kafka.
 Reads from "new_listings" topic, persists to PostgreSQL stream_listings, and optionally prints.
 """
 
+import hashlib
 import json
 import os
 from confluent_kafka import Consumer, KafkaError
@@ -52,13 +53,30 @@ def get_warehouse_conn():
     )
 
 
+def _listing_id(data: dict, source: str) -> str:
+    """Stable id for deduplication. Prefer listing_id; else hash of key fields (e.g. Yad2 has no id)."""
+    explicit = data.get("listing_id") or data.get("id")
+    if explicit is not None:
+        return str(explicit)
+    h = hashlib.sha256(
+        json.dumps(
+            {
+                "source": source,
+                "city": data.get("city"),
+                "street": data.get("street"),
+                "price": data.get("price"),
+            },
+            sort_keys=True,
+        ).encode()
+    ).hexdigest()
+    return f"gen_{h[:16]}"
+
+
 def save_listing_to_db(conn, listing: dict) -> bool:
     """Insert or update one listing in stream_listings. Returns True if saved."""
     source = listing.get("source", "unknown")
     data = listing.get("listing", {})
-    listing_id = str(data.get("listing_id", ""))
-    if not listing_id:
-        return False
+    listing_id = _listing_id(data, source)
 
     price = data.get("price") or 0
     sqm = data.get("sqm")
