@@ -56,10 +56,10 @@ SELECT
     EXTRACT(QUARTER FROM d)::INT AS quarter,
     EXTRACT(MONTH FROM d)::INT AS month,
     CASE EXTRACT(MONTH FROM d)::INT
-        WHEN 1 THEN 'January' WHEN 2 THEN 'February' WHEN 3 THEN 'March'
-        WHEN 4 THEN 'April' WHEN 5 THEN 'May' WHEN 6 THEN 'June'
-        WHEN 7 THEN 'July' WHEN 8 THEN 'August' WHEN 9 THEN 'September'
-        WHEN 10 THEN 'October' WHEN 11 THEN 'November' WHEN 12 THEN 'December'
+        WHEN 1 THEN 'ינואר' WHEN 2 THEN 'פברואר' WHEN 3 THEN 'מרץ'
+        WHEN 4 THEN 'אפריל' WHEN 5 THEN 'מאי' WHEN 6 THEN 'יוני'
+        WHEN 7 THEN 'יולי' WHEN 8 THEN 'אוגוסט' WHEN 9 THEN 'ספטמבר'
+        WHEN 10 THEN 'אוקטובר' WHEN 11 THEN 'נובמבר' WHEN 12 THEN 'דצמבר'
     END AS month_name,
     EXTRACT(DOW FROM d)::INT AS day_of_week,
     d >= '2020-03-01' AS is_post_covid,
