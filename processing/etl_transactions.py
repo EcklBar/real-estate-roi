@@ -115,9 +115,6 @@ def etl_street_deals(spark: SparkSession):
 
     # Step 2: Add calculated fields
     enriched_df = flat_df.withColumn(
-        "price_per_sqm",
-        F.when(F.col("sqm") > 0, F.round(F.col("price") / F.col("sqm"), 0)).otherwise(None)
-    ).withColumn(
         "time_id",
         F.regexp_replace(F.col("sale_date"), "-", "").cast(T.IntegerType())
     )
@@ -139,22 +136,20 @@ def etl_street_deals(spark: SparkSession):
     )
     write_to_postgres(locations_df, "dim_location")
 
-    # Step 4: Build and load dim_property
+        # Step 4: Build and load dim_property
     print("\n[ETL] Loading dim_property...")
     properties_df = (
         enriched_df
-        .select("property_type", "rooms", "year_built", "floor")
+        .select("property_type", "rooms", "year_built", "floor", "total_floors")
         .distinct()
     )
     write_to_postgres(properties_df, "dim_property")
 
-    # Step 5: Load fact_transactions
+        # Step 5: Load fact_transactions
     print("\n[ETL] Loading fact_transactions...")
     facts_df = enriched_df.select(
         F.col("time_id"),
         F.col("price"),
-        F.col("sqm"),
-        F.col("price_per_sqm"),
         F.col("property_type").alias("transaction_type"),
         F.concat(
             F.col("city"), F.lit(", "),
