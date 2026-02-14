@@ -160,7 +160,7 @@ def main():
         print("-" * 40)
 
         # Step 1: Fetch from API
-        transactions = fetch_all_transactions(city, max_pages=3, delay=2.0)
+        transactions = fetch_all_transactions(city, batch_size=1000, max_records=3000, delay=1.0)
 
         if not transactions:
             print(f"No data for {city}, skipping...")
