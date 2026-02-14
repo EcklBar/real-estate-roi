@@ -136,3 +136,47 @@ def upload_to_minio(data: list, city: str) -> str:
 
     print(f"Uploaded to MinIO: {RAW_BUCKET}/{path} ({len(json_bytes):,} bytes)")
     return path
+
+# ============================================
+# MAIN
+# ============================================
+
+def main():
+    """Fetch transactions for major cities and upload to MinIO."""
+    print("=" * 60)
+    print("Nadlanist -- Gov.il Fetcher")
+    print("=" * 60)
+
+    cities = [
+        "תל אביב יפו",
+        "ירושלים",
+        "חיפה",
+    ]
+
+    for city in cities:
+        print(f"\nProcessing: {city}")
+        print("-" * 40)
+
+        # Step 1: Fetch from API
+        transactions = fetch_all_transactions(city, max_pages=3, delay=2.0)
+
+        if not transactions:
+            print(f"No data for {city}, skipping...")
+            continue
+
+        # Step 2: Quick data peek
+        sample = transactions[0]
+        print(f"\nSample transaction:")
+        for key, val in list(sample.items())[:8]:
+            print(f"   {key}: {val}")
+
+        # Step 3: Upload to MinIO
+        upload_to_minio(transactions, city)
+
+    print("\n" + "=" * 60)
+    print("Done! Check MinIO Console at http://localhost:9001")
+    print("=" * 60)
+
+
+if __name__ == "__main__":
+    main()
