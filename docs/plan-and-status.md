@@ -51,7 +51,7 @@
 | DAG: Yad2 streaming (תדירות) | ✅ | dag_yad2_streaming.py |
 | DAG: Madlan streaming (תדירות) | ✅ | dag_madlan_streaming.py |
 | Consumer: קורא מ-Kafka, מעבד ומדפיס | ✅ | listings_consumer.py |
-| Consumer: שמירה ל-DB או MinIO | ❌ | כרגע רק print — **נשאר** |
+| Consumer: שמירה ל-PostgreSQL (stream_listings) | ✅ | upsert לפי source+listing_id |
 
 ---
 
@@ -65,26 +65,26 @@
 | גרף התפלגות מחירים | ✅ | |
 | טבלת עסקאות | ✅ | |
 | גרף ממוצע מחיר לאורך זמן | ✅ | |
-| הצגת מודעות (listings) מהסטרימינג | ❌ | תלוי ב-Consumer→DB — **נשאר** |
+| הצגת מודעות (listings) בדשבורד | ❌ | טבלה קיימת — **נשאר** (סעיף בדשבורד) |
 
 ---
 
 ## 6. נושאים שלא הושלמו (לפי סדר עדיפות)
 
-1. **Consumer → אחסון**  
-   לשמור listings מ-Kafka ב-PostgreSQL (טבלה ייעודית) או ב-MinIO. אחרי זה אפשר לחבר בדשבורד.
+1. **דשבורד — צפייה במודעות**  
+   טבלת `stream_listings` קיימת; להוסיף בדשבורד סעיף/טאב שמציג מודעות (מסנן עיר, מחיר, מקור יד2/מדלן).
 
 2. **טסטים**  
    Unit tests ל-parsing (Madlan), ל-gov_api, ל-ETL (אופציונלי אבל מומלץ).
 
-3. **תיעוד**  
+3. **תיעוד (README)**  
    README: איך להריץ (`docker compose up -d`), משתני סביבה, אילו DAGs, איך להריץ producer/consumer ידנית.
 
 4. **אופציונלי / להמשך**  
    - מקורות נוספים (CBS, בנק ישראל)  
    - ELK: שליחת לוגים ל-Elasticsearch  
-   - Deduplication ב-consumer (listing_id + source)  
-   - Retry/error handling ב-producers
+   - Retry/error handling ב-producers  
+   - (Deduplication כבר קיים: ON CONFLICT ב-stream_listings)
 
 ---
 
@@ -95,8 +95,8 @@
 | תשתית | כל השירותים | — |
 | סכמה | כל הטבלאות | — |
 | Batch | Extract → MinIO → ETL → Warehouse + DAG | — |
-| Streaming | Producers + DAGs + Consumer (הדפסה) | Consumer→DB/MinIO |
-| דשבורד | KPIs, גרפים, טבלאות (עסקאות) | צפייה במודעות (אחרי Consumer→DB) |
+| Streaming | Producers + DAGs + Consumer + שמירה ל-DB | — |
+| דשבורד | KPIs, גרפים, טבלאות (עסקאות) | צפייה במודעות (stream_listings) |
 | איכות/תיעוד | — | טסטים, README |
 
-**הצעד הבא הממוקד:** Consumer שיכתוב listings ל-PostgreSQL (טבלת `stream_listings` או דומה), ואז לחבר את הדשבורד למודעות אם תרצה.
+**הצעד הבא הממוקד:** להוסיף בדשבורד סעיף שמציג מודעות מ-`stream_listings` (מסננים, טבלה).

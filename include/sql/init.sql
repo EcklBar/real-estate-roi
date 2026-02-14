@@ -140,6 +140,35 @@ CREATE TABLE IF NOT EXISTS stg_nadlan_raw (
 );
 
 -- ============================================
+-- STREAM LISTINGS (Kafka → Consumer → DB)
+-- ============================================
+-- Listings from Yad2/Madlan consumed from Kafka and persisted here.
+
+CREATE TABLE IF NOT EXISTS stream_listings (
+    id              SERIAL PRIMARY KEY,
+    source          VARCHAR(50) NOT NULL,
+    listing_id      VARCHAR(100) NOT NULL,
+    city            VARCHAR(100),
+    neighborhood    VARCHAR(100),
+    street          VARCHAR(150),
+    rooms           DECIMAL(3,1),
+    sqm             INT,
+    floor           INT,
+    price           DECIMAL(12,0) NOT NULL,
+    price_per_sqm   DECIMAL(10,0),
+    property_type   VARCHAR(50),
+    url             TEXT,
+    event_time      TIMESTAMPTZ,
+    created_at      TIMESTAMP DEFAULT NOW(),
+    UNIQUE(source, listing_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_stream_listings_source ON stream_listings(source);
+CREATE INDEX IF NOT EXISTS idx_stream_listings_city ON stream_listings(city);
+CREATE INDEX IF NOT EXISTS idx_stream_listings_price ON stream_listings(price);
+CREATE INDEX IF NOT EXISTS idx_stream_listings_created ON stream_listings(created_at DESC);
+
+-- ============================================
 -- INDEXES
 -- ============================================
 
